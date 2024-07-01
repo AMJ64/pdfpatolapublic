@@ -1,7 +1,5 @@
 PyPDF2
 groq
-io
 scikit-learn
 numpy
-json
 streamlit
