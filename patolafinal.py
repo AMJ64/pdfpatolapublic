@@ -11,7 +11,7 @@ import uuid
 
 # Initialize Groq client
 client = Groq(
-    api_key="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",
+    api_key="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",
 )
 
 # Function to extract text from PDF
