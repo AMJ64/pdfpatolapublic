@@ -9,8 +9,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import json
 import uuid
-# from pydantic import BaseModel
-# import scipy
 
 # Initialize Groq client
 client = Groq(
@@ -93,7 +91,6 @@ with st.sidebar:
     selected = option_menu(
         menu_title="Choose Functionality",
         options=["PDF Reader", "Speech Recognition"],
-        # menu_icon="robot",
         icons=["file-earmark-pdf", "mic"],
         default_index=0
     )
@@ -119,24 +116,23 @@ if selected == "PDF Reader":
 
     session_id = st.session_state.session_id
 
-    # File uploader
-    uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+    # File uploader for multiple PDFs
+    uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multiple_files=True)
 
-    if uploaded_file is not None:
-        # Clear chat history, delete JSON file, and clear session state when a new PDF is uploaded
-        if "uploaded_file" in st.session_state and st.session_state.uploaded_file != uploaded_file:
+    if uploaded_files:
+        # Clear chat history, delete JSON file, and clear session state when new PDFs are uploaded
+        if "uploaded_files" in st.session_state and st.session_state.uploaded_files != uploaded_files:
             if "chat_history" in st.session_state:
                 del st.session_state["chat_history"]
             clear_chat_history(session_id)
             st.session_state.clear()  # Clear all session state data
             st.session_state.session_id = session_id  # Retain the session ID
-            
-        st.session_state.uploaded_file = uploaded_file
+        
+        st.session_state.uploaded_files = uploaded_files
 
-        # Extract text from PDF
-        pdf_text = extract_text_from_pdf(uploaded_file)
-        # st.write("Extracted Text:")
-        # st.write(pdf_text)
+        # Extract text from each PDF
+        pdf_texts = [extract_text_from_pdf(file) for file in uploaded_files]
+        combined_pdf_text = "\n\n".join(pdf_texts)
 
         # Initialize session state for chat history
         if "chat_history" not in st.session_state:
@@ -194,15 +190,15 @@ if selected == "PDF Reader":
         # Input box at the bottom with embedded send button
         user_input = st.chat_input("Ask a question about the PDF content:")
         if user_input:
-            # Retrieve relevant text from the PDF content
-            relevant_text = retrieve_relevant_text(pdf_text, user_input)
+            # Retrieve relevant text from the combined PDF content
+            relevant_text = retrieve_relevant_text(combined_pdf_text, user_input)
             
             # Generate response using the Groq client
             chat_completion = client.chat.completions.create(
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a helpful assistant. The following is the relevant content of the PDF: " + relevant_text + " act like you are a pdf"
+                        "content": "You are a helpful assistant. The following is the relevant content of the PDF: " + combined_pdf_text + " act like you are a pdf"
                     },
                     {
                         "role": "user",
