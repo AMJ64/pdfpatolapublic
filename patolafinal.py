@@ -4,7 +4,7 @@ from streamlit_option_menu import option_menu
 from PyPDF2 import PdfReader
 from io import BytesIO
 from groq import Groq
-@@ -60,51 +61,137 @@ def clear_chat_history(session_id):
+def clear_chat_history(session_id):
     if os.path.exists(filename):
         os.remove(filename)
 
