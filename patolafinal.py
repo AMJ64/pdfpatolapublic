@@ -9,8 +9,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import json
 import uuid
-# from pydantic import BaseModel
-# import scipy
 
 # Initialize Groq client
 client = Groq(
@@ -71,7 +69,7 @@ def transcribe_audio(file, language):
         prompt="Specify context or spelling",  # Optional
         response_format="json",  # Optional
         language=language,  # Optional
-        temperature=0.2  # Optional
+        temperature=0.2 # Optional
     )
     return transcription.text
 
@@ -130,7 +128,7 @@ if selected == "PDF Reader":
             clear_chat_history(session_id)
             st.session_state.clear()  # Clear all session state data
             st.session_state.session_id = session_id  # Retain the session ID
-            
+        
         st.session_state.uploaded_file = uploaded_file
 
         # Extract text from PDF
@@ -197,18 +195,20 @@ if selected == "PDF Reader":
             # Retrieve relevant text from the PDF content
             relevant_text = retrieve_relevant_text(pdf_text, user_input)
             
+            # Prepare the messages for the Groq client
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant. The following is the relevant content of the PDF: " + relevant_text + " act like you are a pdf"
+                }
+            ]
+            for role, message in st.session_state.chat_history:
+                messages.append({"role": role, "content": message})
+            messages.append({"role": "user", "content": user_input})
+
             # Generate response using the Groq client
             chat_completion = client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a helpful assistant. The following is the relevant content of the PDF: " + relevant_text + " act like you are a pdf"
-                    },
-                    {
-                        "role": "user",
-                        "content": user_input,
-                    }
-                ] + [{"role": role, "content": message} for role, message in st.session_state.chat_history],
+                messages=messages,
                 model=st.session_state.selected_model,
             )
             response = chat_completion.choices[0].message.content
