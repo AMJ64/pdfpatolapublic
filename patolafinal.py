@@ -9,6 +9,36 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import json
 import uuid
+from transformers import AutoTokenizer, AutoModel
+import torch
+
+# Load pre-trained model and tokenizer
+model_name = "sentence-transformers/all-MiniLM-L6-v2"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModel.from_pretrained(model_name)
+
+def get_embeddings(text):
+    # Tokenize the input text
+    inputs = tokenizer(text, return_tensors='pt', truncation=True, padding=True)
+    # Get the embeddings
+    with torch.no_grad():
+        outputs = model(**inputs)
+    # Mean pooling to get the sentence embedding
+    embeddings = outputs.last_hidden_state.mean(dim=1)
+    return embeddings
+
+# Initialize session state for context embeddings
+if "context_embeddings" not in st.session_state:
+    st.session_state.context_embeddings = []
+
+def store_context_embeddings(text):
+    embeddings = get_embeddings(text)
+    st.session_state.context_embeddings.append(embeddings)
+
+def retrieve_context_embeddings():
+    if st.session_state.context_embeddings:
+        return torch.cat(st.session_state.context_embeddings, dim=0)
+    return None
 
 # Initialize Groq client
 client = Groq(
@@ -23,10 +53,16 @@ def extract_text_from_pdf(pdf_file):
         text += page.extract_text()
     return text
 
+# Function to split text into smaller chunks
+def split_text_into_chunks(text, chunk_size=500):
+    words = text.split()
+    chunks = [' '.join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+    return chunks
+
 # Function to retrieve relevant text from the PDF content using TF-IDF
 def retrieve_relevant_text(pdf_text, query):
-    # Split the PDF text into chunks (e.g., paragraphs)
-    chunks = pdf_text.split('\n\n')
+    # Split the PDF text into chunks
+    chunks = split_text_into_chunks(pdf_text)
     
     # Create a TF-IDF vectorizer
     vectorizer = TfidfVectorizer().fit_transform(chunks + [query])
@@ -41,26 +77,6 @@ def retrieve_relevant_text(pdf_text, query):
     
     return relevant_text
 
-# Function to save chat history to a file
-def save_chat_history(chat_history, session_id):
-    filename = f"chat_history_{session_id}.json"
-    with open(filename, "w") as file:
-        json.dump(chat_history, file)
-
-# Function to load chat history from a file
-def load_chat_history(session_id):
-    filename = f"chat_history_{session_id}.json"
-    if os.path.exists(filename):
-        with open(filename, "r") as file:
-            return json.load(file)
-    return []
-
-# Function to clear chat history
-def clear_chat_history(session_id):
-    filename = f"chat_history_{session_id}.json"
-    if os.path.exists(filename):
-        os.remove(filename)
-
 # Function to transcribe audio using Groq
 def transcribe_audio(file, language):
     transcription = client.audio.transcriptions.create(
@@ -69,7 +85,7 @@ def transcribe_audio(file, language):
         prompt="Specify context or spelling",  # Optional
         response_format="json",  # Optional
         language=language,  # Optional
-        temperature=0.2 # Optional
+        temperature=0.2  # Optional
     )
     return transcription.text
 
@@ -91,7 +107,6 @@ with st.sidebar:
     selected = option_menu(
         menu_title="Choose Functionality",
         options=["PDF Reader", "Speech Recognition"],
-        # menu_icon="robot",
         icons=["file-earmark-pdf", "mic"],
         default_index=0
     )
@@ -105,6 +120,94 @@ if selected_model != st.session_state.selected_model:
     st.session_state.selected_model = selected_model
     st.experimental_rerun()
 
+# Custom CSS and JavaScript
+st.markdown("""
+    <style>
+        body {
+            font-family: 'Helvetica', sans-serif;
+            background: url('https://www.transparenttextures.com/patterns/stardust.png'), url('https://www.transparenttextures.com/patterns/flowers.png');
+            background-size: cover;
+        }
+        .chat-message {
+            position: relative;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 10px;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        .chat-message.user {
+            background-color: #DCF8C6;
+            text-align: right;
+        }
+        .chat-message.assistant {
+            background-color: #F1F0F0;
+            text-align: left;
+        }
+        .chat-message .arrow {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            position: absolute;
+        }
+        .chat-message.user .arrow {
+            border-width: 10px 0 10px 10px;
+            border-color: transparent transparent transparent #DCF8C6;
+            right: -10px;
+            top: 10px;
+        }
+        .chat-message.assistant .arrow {
+            border-width: 10px 10px 10px 0;
+            border-color: transparent #F1F0F0 transparent transparent;
+            left: -10px;
+            top: 10px;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .copy-button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 12px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .copy-button:hover {
+            background-color: #45a049;
+        }
+        .sidebar .option-menu {
+            animation: slideIn 0.5s ease-in-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+        .chat-input-container {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background: white;
+            padding: 10px;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+        }
+    </style>
+    <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                alert('Copied to clipboard');
+            }, function(err) {
+                console.error('Could not copy text: ', err);
+            });
+        }
+    </script>
+""", unsafe_allow_html=True)
+
 # PDF Reader Page
 if selected == "PDF Reader":
     st.title("PDF Patola")
@@ -117,133 +220,90 @@ if selected == "PDF Reader":
 
     session_id = st.session_state.session_id
 
-    # File uploader
-    uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+    # File uploader for multiple PDFs
+    uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multiple_files=True)
 
-    if uploaded_file is not None:
-        # Clear chat history, delete JSON file, and clear session state when a new PDF is uploaded
-        if "uploaded_file" in st.session_state and st.session_state.uploaded_file != uploaded_file:
-            if "chat_history" in st.session_state:
-                del st.session_state["chat_history"]
-            clear_chat_history(session_id)
-            st.session_state.clear()  # Clear all session state data
-            st.session_state.session_id = session_id  # Retain the session ID
-        
-        st.session_state.uploaded_file = uploaded_file
-
-        # Extract text from PDF
-        pdf_text = extract_text_from_pdf(uploaded_file)
-        # st.write("Extracted Text:")
-        # st.write(pdf_text)
+    if uploaded_files:
+        # Extract text from each PDF
+        pdf_texts = [extract_text_from_pdf(file) for file in uploaded_files]
+        combined_pdf_text = "\n\n".join(pdf_texts)
 
         # Initialize session state for chat history
         if "chat_history" not in st.session_state:
-            st.session_state.chat_history = load_chat_history(session_id)
+            st.session_state.chat_history = []
+
+        # Placeholder for chat messages
+        chat_placeholder = st.empty()
 
         # Display chat history
-        st.markdown(
-            """
-            <style>
-            .chat-message {
-                display: flex;
-                align-items: center;
-                margin: 10px 0;
-            }
-            .chat-message.user .message {
-                background-color: #dcf8c6;
-                align-self: flex-end;
-            }
-            .chat-message.assistant .message {
-                background-color: #f1f0f0;
-                align-self: flex-start;
-            }
-            .message {
-                padding: 10px;
-                border-radius: 10px;
-                max-width: 80%;
-                word-wrap: break-word;
-            }
-            .arrow {
-                width: 0;
-                height: 0;
-                border-style: solid;
-            }
-            .user .arrow {
-                border-width: 0 10px 10px 0;
-                border-color: transparent #dcf8c6 transparent transparent;
-                margin-left: 10px;
-            }
-            .assistant .arrow {
-                border-width: 10px 10px 0 0;
-                border-color: #f1f0f0 transparent transparent transparent;
-                margin-right: 10px;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-
-        for role, message in st.session_state.chat_history:
-            if role == "user":
-                st.markdown(f'<div class="chat-message user"><div class="message">{message}</div><div class="arrow user"></div></div>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div class="chat-message assistant"><div class="arrow assistant"></div><div class="message">{message}</div></div>', unsafe_allow_html=True)
+        with chat_placeholder.container():
+            for role, message in st.session_state.chat_history:
+                if role == "user":
+                    st.markdown(f'<div class="chat-message user"><div class="message">{message}</div><div class="arrow user"></div></div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="chat-message assistant"><div class="arrow assistant"></div><div class="message">{message}</div></div>', unsafe_allow_html=True)
 
         # Input box at the bottom with embedded send button
         user_input = st.chat_input("Ask a question about the PDF content:")
         if user_input:
-            # Retrieve relevant text from the PDF content
-            relevant_text = retrieve_relevant_text(pdf_text, user_input)
-            
-            # Prepare the messages for the Groq client
-            messages = [
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant. The following is the relevant content of the PDF: " + relevant_text + " act like you are a pdf"
-                }
-            ]
-            for role, message in st.session_state.chat_history:
-                messages.append({"role": role, "content": message})
-            messages.append({"role": "user", "content": user_input})
+            # Retrieve relevant text from the combined PDF content
+            relevant_text = retrieve_relevant_text(combined_pdf_text, user_input)
+
+            # Store context embeddings
+            store_context_embeddings(relevant_text)
+
+            # Retrieve context embeddings
+            context_embeddings = retrieve_context_embeddings()
 
             # Generate response using the Groq client
             chat_completion = client.chat.completions.create(
-                messages=messages,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant. The following is the relevant content of the PDF: " + combined_pdf_text + " act like you are a pdf"
+                    },
+                    {
+                        "role": "user",
+                        "content": user_input,
+                    }
+                ],
                 model=st.session_state.selected_model,
             )
             response = chat_completion.choices[0].message.content
-            
+
             # Update chat history
             st.session_state.chat_history.append(("user", user_input))
             st.session_state.chat_history.append(("assistant", response))
-            
-            # Save chat history
-            save_chat_history(st.session_state.chat_history, session_id)
-            
-            # Clear the input box
-            st.experimental_rerun()
 
-        # Clear chat history button
-        if st.button("Clear Chat History"):
-            if "chat_history" in st.session_state:
-                del st.session_state["chat_history"]
-            clear_chat_history(session_id)
-            st.experimental_rerun()
+            # Display the updated chat history
+            with chat_placeholder.container():
+                for role, message in st.session_state.chat_history:
+                    if role == "user":
+                        st.markdown(f'<div class="chat-message user"><div class="message">{message}</div><div class="arrow user"></div></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="chat-message assistant"><div class="arrow assistant"></div><div class="message">{message}</div></div>', unsafe_allow_html=True)
+
+            # Add copy button
+            # st.markdown(f'<button class="copy-button" onclick="copyToClipboard(`{response}`)">Copy</button>', unsafe_allow_html=True)
 
 # Speech Recognition Page
 if selected == "Speech Recognition":
     st.title("Speech to Text 🎤")
-    
+
     uploaded_audio = st.file_uploader("Upload an audio file..", type=["m4a", "mp3", "wav"])
-    
+
     # Add a dropdown menu for language selection
     language = st.selectbox(
         "Select language for transcription:",
         ("en", "hi", "es", "fr", "de", "ja", "ru")
     )
-    
+
     if st.button("Transcribe Audio"):
         if uploaded_audio is not None:
             transcription_text = transcribe_audio(uploaded_audio, language)
             st.write("Transcription:")
             st.write(transcription_text)
+            # Add copy button for transcription text
+            st.markdown(f'<button class="copy-button" onclick="copyToClipboard(`{transcription_text}`)">Copy</button>', unsafe_allow_html=True)
+        else:
+            st.write("Please upload an audio file to transcribe.")
