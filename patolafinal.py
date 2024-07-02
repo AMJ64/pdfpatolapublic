@@ -1,4 +1,5 @@
 import os
+from transformers import AutoTokenizer, AutoModel
 import streamlit as st
 from streamlit_option_menu import option_menu
 from PyPDF2 import PdfReader
@@ -285,7 +286,12 @@ if selected == "PDF Reader":
 
             # Add copy button
             # st.markdown(f'<button class="copy-button" onclick="copyToClipboard(`{response}`)">Copy</button>', unsafe_allow_html=True)
-
+    # Add the "Clear Chat" button below the chatbox
+    if st.button("Clear Chat"):
+        st.session_state.chat_history = []
+        st.session_state.context_embeddings = []
+        st.session_state.uploaded_files = []
+        st.experimental_rerun()
 # Speech Recognition Page
 if selected == "Speech Recognition":
     st.title("Speech to Text 🎤")
@@ -297,7 +303,6 @@ if selected == "Speech Recognition":
         "Select language for transcription:",
         ("en", "hi", "es", "fr", "de", "ja", "ru")
     )
-
     if st.button("Transcribe Audio"):
         if uploaded_audio is not None:
             transcription_text = transcribe_audio(uploaded_audio, language)
