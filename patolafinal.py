@@ -4,7 +4,54 @@ from streamlit_option_menu import option_menu
 from PyPDF2 import PdfReader
 from io import BytesIO
 from groq import Groq
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+import json
+import uuid
+# Initialize Groq client
+client = Groq(
+    api_key="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",
+)
+# Function to extract text from PDF
+def extract_text_from_pdf(pdf_file):
+    pdf_reader = PdfReader(BytesIO(pdf_file.read()))
+    text = ""
+    for page in pdf_reader.pages:
+        text += page.extract_text()
+    return text
+# Function to retrieve relevant text from the PDF content using TF-IDF
+def retrieve_relevant_text(pdf_text, query):
+    # Split the PDF text into chunks (e.g., paragraphs)
+    chunks = pdf_text.split('\n\n')
+    
+    # Create a TF-IDF vectorizer
+    vectorizer = TfidfVectorizer().fit_transform(chunks + [query])
+    vectors = vectorizer.toarray()
+    
+    # Compute cosine similarity between the query and the chunks
+    cosine_similarities = cosine_similarity(vectors[-1:], vectors[:-1]).flatten()
+    
+    # Get the most relevant chunk
+    most_relevant_index = np.argmax(cosine_similarities)
+    relevant_text = chunks[most_relevant_index]
+    
+    return relevant_text
+# Function to save chat history to a file
+def save_chat_history(chat_history, session_id):
+    filename = f"chat_history_{session_id}.json"
+    with open(filename, "w") as file:
+        json.dump(chat_history, file)
+# Function to load chat history from a file
+def load_chat_history(session_id):
+    filename = f"chat_history_{session_id}.json"
+    if os.path.exists(filename):
+        with open(filename, "r") as file:
+            return json.load(file)
+    return []
+# Function to clear chat history
 def clear_chat_history(session_id):
+    filename = f"chat_history_{session_id}.json"
     if os.path.exists(filename):
         os.remove(filename)
 
