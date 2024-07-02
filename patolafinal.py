@@ -9,6 +9,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import json
 import uuid
+# from pydantic import BaseModel
+# import scipy
 
 # Initialize Groq client
 client = Groq(
@@ -62,7 +64,6 @@ def clear_chat_history(session_id):
         os.remove(filename)
 
 # Function to transcribe audio using Groq
-
 def transcribe_audio(file, language):
     transcription = client.audio.transcriptions.create(
         file=(file.name, file.read()),
@@ -70,7 +71,7 @@ def transcribe_audio(file, language):
         prompt="Specify context or spelling",  # Optional
         response_format="json",  # Optional
         language=language,  # Optional
-        temperature=0.2 # Optional
+        temperature=0.2  # Optional
     )
     return transcription.text
 
@@ -129,7 +130,7 @@ if selected == "PDF Reader":
             clear_chat_history(session_id)
             st.session_state.clear()  # Clear all session state data
             st.session_state.session_id = session_id  # Retain the session ID
-        
+            
         st.session_state.uploaded_file = uploaded_file
 
         # Extract text from PDF
@@ -207,7 +208,7 @@ if selected == "PDF Reader":
                         "role": "user",
                         "content": user_input,
                     }
-                ],
+                ] + [{"role": role, "content": message} for role, message in st.session_state.chat_history],
                 model=st.session_state.selected_model,
             )
             response = chat_completion.choices[0].message.content
