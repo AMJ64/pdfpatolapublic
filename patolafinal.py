@@ -142,7 +142,7 @@ st.markdown("""
         }
         .chat-message.assistant {
             background-color: #F1F0F0;
-            color: #ffffff;
+            color: #000000;
             text-align: left;
         }
         .chat-message .arrow {
