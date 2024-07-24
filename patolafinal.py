@@ -102,7 +102,7 @@ st.set_page_config(
 
 # Initialize session state for selected model
 if "selected_model" not in st.session_state:
-    st.session_state.selected_model = "llama3-70b-8192"
+    st.session_state.selected_model = "llama-3.1-70b-versatile"
 
 with st.sidebar:
     selected = option_menu(
@@ -114,7 +114,7 @@ with st.sidebar:
 
 # Model Selection Section (Always Visible)
 st.sidebar.subheader("Select Model for PDF Reader")
-model_options = ["llama3-70b-8192", "mixtral-8x7b-32768", "gemma-7b-it"]
+model_options = ["llama-3.1-70b-versatile", "llama-3.1-405b-reasoning", "gemma-7b-it"]
 selected_model = st.sidebar.selectbox("Choose a model", model_options, index=model_options.index(st.session_state.selected_model))
 
 if selected_model != st.session_state.selected_model:
